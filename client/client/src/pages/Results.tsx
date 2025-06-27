@@ -1,16 +1,37 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
 import { MoonPhaseSVG } from "../components/MoonPhaseSVG";
 import { Heart, Star, Calendar, User } from "lucide-react";
+import { decodeShareData, calculateClientCompatibility, type CompatibilityResultData } from "../lib/clientCompatibility";
 
 interface ResultsProps {
   params: { shareUrl: string };
 }
 
 export default function Results({ params }: ResultsProps) {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['/api/compatibility', params.shareUrl],
-    queryFn: () => fetch(`/api/compatibility/${params.shareUrl}`).then(res => res.json())
-  });
+  const [data, setData] = useState<CompatibilityResultData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      // Decode the share URL to get the original input
+      const input = decodeShareData(params.shareUrl);
+      
+      if (!input) {
+        setError("Invalid share URL");
+        setIsLoading(false);
+        return;
+      }
+
+      // Calculate compatibility client-side
+      const result = calculateClientCompatibility(input);
+      setData(result);
+      setIsLoading(false);
+    } catch (err) {
+      setError((err as Error).message);
+      setIsLoading(false);
+    }
+  }, [params.shareUrl]);
 
   if (isLoading) {
     return (

@@ -4,10 +4,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { CelebritySearch } from "@/components/CelebritySearch";
-import { useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import type { Celebrity } from "../data/celebrities";
-import type { CompatibilityRequest } from "@shared/schema";
+import { calculateClientCompatibility, encodeShareData, type CompatibilityInput } from "../lib/clientCompatibility";
 import { Calendar, Star, Users, Rocket } from "lucide-react";
 
 type InputMode = 'date-date' | 'date-celeb' | 'celeb-celeb';
@@ -19,24 +18,9 @@ export default function Home() {
   const [secondDate, setSecondDate] = useState('');
   const [firstCeleb, setFirstCeleb] = useState<Celebrity | null>(null);
   const [secondCeleb, setSecondCeleb] = useState<Celebrity | null>(null);
+  const [isCalculating, setIsCalculating] = useState(false);
 
-  const compatibilityMutation = useMutation({
-    mutationFn: async (data: CompatibilityRequest) => {
-      const response = await fetch('/api/compatibility', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) throw new Error('Failed to calculate compatibility');
-      return response.json();
-    },
-    onSuccess: (data) => {
-      // Navigate to results page with the data
-      setLocation(`/results/${data.shareUrl}`);
-    },
-  });
-
-  const handleCalculateCompatibility = () => {
+  const handleCalculateCompatibility = async () => {
     let person1Type: 'date' | 'celebrity';
     let person1Value: string;
     let person2Type: 'date' | 'celebrity';
@@ -72,12 +56,29 @@ export default function Home() {
       person2Value = secondCeleb.slug;
     }
 
-    compatibilityMutation.mutate({
+    const input: CompatibilityInput = {
       person1Type,
       person1Value,
       person2Type,
       person2Value,
-    });
+    };
+
+    try {
+      setIsCalculating(true);
+      
+      // Calculate compatibility client-side
+      const result = calculateClientCompatibility(input);
+      
+      // Encode the input data for URL sharing
+      const encodedData = encodeShareData(input);
+      
+      // Navigate to results page with encoded data
+      setLocation(`/results/${encodedData}`);
+    } catch (error) {
+      alert('Error calculating compatibility: ' + (error as Error).message);
+    } finally {
+      setIsCalculating(false);
+    }
   };
 
   return (
@@ -192,7 +193,7 @@ export default function Home() {
                   </div>
                   <CelebritySearch
                     label="2nd Celebrity"
-                    value={secondCeleb?.name || ''}
+                    value={secondCeleb?.slug || ''}
                     onSelect={setSecondCeleb}
                   />
                 </div>
@@ -202,12 +203,12 @@ export default function Home() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <CelebritySearch
                     label="1st Celebrity"
-                    value={firstCeleb?.name || ''}
+                    value={firstCeleb?.slug || ''}
                     onSelect={setFirstCeleb}
                   />
                   <CelebritySearch
                     label="2nd Celebrity"
-                    value={secondCeleb?.name || ''}
+                    value={secondCeleb?.slug || ''}
                     onSelect={setSecondCeleb}
                   />
                 </div>
@@ -219,10 +220,10 @@ export default function Home() {
           <div className="text-center">
             <Button
               onClick={handleCalculateCompatibility}
-              disabled={compatibilityMutation.isPending}
+              disabled={isCalculating}
               className="bg-cosmic-orange hover:bg-cosmic-orange/90 text-white font-bold py-4 px-12 text-xl transition-all duration-200 transform hover:scale-105 glow-effect"
             >
-              {compatibilityMutation.isPending ? (
+              {isCalculating ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
                   Calculating...
